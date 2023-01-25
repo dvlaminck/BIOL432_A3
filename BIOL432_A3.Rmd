@@ -1,0 +1,208 @@
+---
+title: "20180542_A3"
+output: html_document
+date: "`r Sys.Date()`"
+---
+Inputting dataset and importing necessary packages
+```{r}
+library(MASS)
+library(ggplot2)
+library(dplyr)
+library(moments)
+source("http://bit.ly/theme_pub")
+setwd("/Users/darahvlaminck/Desktop/BIOL432/Assignment 3/Assignment 3")
+Lythrum <- read.csv("ColauttiBarrett2013Data.csv")
+```
+
+Inspecting the data:
+```{r}
+head(Lythrum)
+```
+```{r}
+dim(Lythrum)
+```
+```{r}
+tail(Lythrum)
+```
+```{r}
+summary(Lythrum)
+```
+```{r}
+str(Lythrum)
+```
+
+Based on data inspection, we can see that we have missing data within the dataset. When we try to run our machine learning, this data will not run. To avoid this, we are going to replace the missing data with the column mean:
+```{r}
+for(i in 1:ncol(Lythrum)) {                                 
+  Lythrum[ , i][is.na(Lythrum[ , i])] <- mean(Lythrum[ , i], na.rm = TRUE)
+}
+tail(Lythrum)
+```
+
+I can't seem to solve the warning (although the output looks okay). Doing this in DPLYR just to be safe:
+```{r}
+Lythrum <- Lythrum %>%
+  mutate(Flwr07 = ifelse(is.na(Flwr07),
+                         mean(Flwr07,na.rm=T), Flwr07),
+         Flwr08 = ifelse(is.na(Flwr08),
+                         mean(Flwr08,na.rm=T), Flwr08),
+         Flwr09 = ifelse(is.na(Flwr09),
+                         mean(Flwr09,na.rm=T), Flwr09),
+         Flwr10 = ifelse(is.na(Flwr10),
+                         mean(Flwr10, na.rm=T), Flwr10),
+         FVeg07 = ifelse(is.na(FVeg07),
+                         mean(FVeg07,na.rm=T), FVeg07),
+         FVeg08 = ifelse(is.na(FVeg08),
+                         mean(FVeg08,na.rm=T), FVeg08),
+         FVeg09 = ifelse(is.na(FVeg09),
+                         mean(FVeg09,na.rm=T), FVeg09),
+         FVeg10 = ifelse(is.na(FVeg10),
+                         mean(FVeg10,na.rm=T), FVeg10),
+         InfMass07 = ifelse(is.na(InfMass07),
+                            mean(InfMass07, na.rm=T), InfMass07),
+         InfMass08 = ifelse(is.na(InfMass08),
+                            mean(InfMass08, na.rm=T), InfMass08),
+         InfMass09 = ifelse(is.na(InfMass09),
+                            mean(InfMass09, na.rm=T), InfMass09),
+         InfMass10 = ifelse(is.na(InfMass10),
+                            mean(InfMass10, na.rm=T), InfMass10),
+         Fruits07 = ifelse(is.na(Fruits07),
+                           mean(Fruits07, na.rm-T), Fruits07),
+         HVeg08 = ifelse(is.na(HVeg08),
+                         mean(HVeg08,na.rm=T), HVeg08),
+         HVeg09 = ifelse(is.na(HVeg09),
+                         mean(HVeg09,na.rm=T), HVeg09),
+         HVeg10 = ifelse(is.na(HVeg10),
+                         mean(HVeg10,na.rm=T), HVeg10))
+tail(Lythrum)
+
+```
+
+Making a dataset with continuous variables:
+```{r}
+Lythrum1 <- Lythrum %>%
+  select(starts_with("InfMass"), starts_with("FVeg"), starts_with("HVeg"), starts_with("Flwr"), Fruits07)
+head(Lythrum1)
+```
+
+Checking the continuous variables for normality:
+```{r}
+kurtosis(Lythrum1)
+```
+```{r}
+skewness(Lythrum1)
+```
+Looking at the skew and kurtosis for these variables, we can see that InfMass07, InfMass08, InfMass09, INfMass10, Flwr07, and Fruit07 do not follow normal distributions. Because we have plants from different sites/ populations, they are expected to have different values. Thus, in real data, we can not always expect to have an exact normal distribution (data is messy)! Although we prefer to work with normally distributed data, scaling our data to the same biological scale should be good enough to continue our analysis.
+
+Scaling the data:
+```{r}
+Lythrum1 <- as.data.frame(scale(Lythrum1))
+```
+
+We do not need to write linear models to select appropriate features because there are many observations (rows) for this data set. In comparison, there are fewer features in this predictive model, which should still give us a strong performance when making predictions on new data. The ratio of rows:columns for this dataset ensure that each observation is important and that there is an overall representative sample. The use of linear models for feature selection is important when we are trying to avoid overfitting a model like a false dicovery problem. But, because there are many more observations than features in this case, we won't run into this issue.
+
+When we think about the dataset from a biological standpoint, all of these measures are valuable. For example, Flwr refers to the days to first flower. As well, FVeg refers to the plant size at first flower. Both of these measurements were taken over 4 different years. Thus, it does not make biological sense to exclude the data from one year and keep the other years. So, it makes most logical sense to include the features from ALL years in this LDA analysis.
+
+Create a data frame that includes our response variables (Predictor data frame was already done previously):
+```{r}
+Response <- Lythrum %>%
+  select(Site, Pop)
+str(Response)
+```
+
+Running the LDA:
+```{r}
+#Doing one model by site
+LDAMod1<-lda(x=Lythrum1,grouping=Response$Site)
+str(LDAMod1)
+```
+```{r}
+#Doing one model by population
+LDAMod2<-lda(x=Lythrum1,grouping=Response$Pop)
+str(LDAMod2)
+```
+You need 2 LD axes to distinguish among sites, 5 LD axes to distinguish among populations. The number of LD axes are determined by the number of categories of the response variables, unlike PCA which is determined by the number of features. The LDA output still demonstrates how each feature contributes to the LD axis, which is calculated to distinguish groups. More specifically, LD axes reduce dimensions and ensure the classes are seperared as much as possible. In this case, there are 3 sites within the data, which can be reduced down to 2 axes. Similarly, there are 6 different populations in the data, which can be reduced to 5 LD axes.The number of LD axes can be computed nby the following equation: Number of group categories - 1
+
+Looking at the $scaling slice:
+```{r}
+LDAMod1$scaling
+```
+```{r}
+LDAMod2$scaling
+```
+The scaling slice shows the factor loadings AKA the LD eigenvectors. The factor loadings for PCA represent a way to relate the original features to the PC axes, or a direction that represent the correlation between the original variables and the principal components. LDA, however, is a supervised method of machine learning. In other words, we know the groups ahead of time and try to find a model that distinguishes them. Therefore, the LD eigenvectors differ because they are determined by the number of catefories of the response variables. In a PCA, we would be given 23 PC eigenvectors, but with the LDA, we are given 2 and 5 respectively.
+
+In summary, the PC eigenvectors represent the number of features within the model, but the LD eigenvectors represent the number of group categories - 1. Both of these eigenvectors, however, still show how each feature contributes to the axis (eigenvector). Yet, the eigenvectors from LDA are rescaled to maximize discrimination between the different groups of the response variable.
+
+
+```{r}
+LDpred1<-predict(LDAMod1)
+str(LDpred1)
+```
+```{r}
+head(LDpred1$x)
+```
+
+```{r}
+LDpred2<-predict(LDAMod2)
+str(LDpred2)
+```
+```{r}
+head(LDpred2$x)
+```
+
+```{r}
+LDApDat1 <- data.frame(Response=Response,
+                      LD1=LDpred1$x[,1],
+                      LD2=LDpred1$x[,2])
+head(LDApDat1)
+```
+
+```{r}
+ggplot(aes(x=LD1,y=LD2,colour=Response.Site),data=LDApDat1) + geom_point() + theme_classic()
+```
+Figure 1: Linear Discriminant Analysis (LDA) bivariate plot of individual measurements from three different growing sites along the LD1 and LD2 axes. Separation of species is based on the amount of days until first flowering, plant size at first flower (FVeg), number of fruits, plant mass at the first day of flowering, and plant height at first flower (HVeg). The different growing included are 1_BEF, 2_KSR, and 3_Timmins, as indicated by the legend. Raw data was scaled using z-scores before LDA analysis. 
+
+```{r}
+LDApDat2 <- data.frame(Response=Response,
+                      LD1=LDpred2$x[,1],
+                      LD2=LDpred2$x[,2],
+                      LD3=LDpred2$x[,3],
+                      LD4=LDpred2$x[,4],
+                      LD5=LDpred2$x[,5])
+head(LDApDat2)
+```
+```{r}
+ggplot(aes(x=LD1,y=LD3,colour=Response.Pop),data=LDApDat2) + geom_point() + theme_classic()
+```
+Figure 2: Linear Discriminant Analysis (LDA) bivariate plot of individual measurements from six different populations, as indicated by the legend, along the LD1 and LD3 axes. Separation of species is based on the amount of days until first flowering, plant size at first flower (FVeg), number of fruits, plant mass at the first day of flowering, and plant height at first flower (HVeg). Raw data was scaled using z-scores before LDA analysis.
+
+________________________
+
+Our PCA demonstrated that PC2 is more affected by Mass and Flwr, whereas PC1 is influenced by all three measurements (Mass, Flwr, and FVeg). We also determined that the same measurements in different years had very similar vectors because they are collinear. Furthermore, variation captured in PC1 corresponded to the 6 different population, while PC2 variation corresponded to the 3 growing environments.
+
+With our LDA, we can find the component axes that best distinguish growing sites and populations with different traits:
+
+Model 1 (By site):
+
+When looking at the scaling values, we can see that higher values of LD1 are determined largely by higher values of InfMass07, Flwr08, and HVeg09, and lower values of Fruits07 and FVeg08. LD2 is largely influenced by high values of FVeg08, Flwr10, and InfMass07, and lower values of InfMass08, FVeg10, and Flwr08.
+
+Based on figure 1, we can see that these two axes are very good at distinguishing growing sites based on the different features (traits).
+
+FVeg and HVeg loaded heavily onto LD2, while InfMass, Flwr, and Fruits loaded onto LD1.
+
+Model 2 (By pop.):
+
+Based on trial and error, the two component axes that best distinguish population are LD1 and LD3 (see Figure 2). 
+
+When looking at the scaling values, we can see that higher values of LD1 are determined largely by higher values of HVeg08 and FVeg10, and lower values of InfMass08 and Flwr09. LD3 is largely influenced by high values of InfMass09, Flwr09, and FVeg09, and lower values of HVeg08 and FVeg10. 
+
+All metrics loaded more onto LD3 compared to LD1.
+
+__________________________
+
+From these findings, we can see that the LDA model based on plant growing site was able to distinguish the observations by growing site. Specifically, plants grown in the Timmins growing site display high mass and plant size at the time of flowering, however, these plants took a long time to flower (Figure 1). Alternatively, the BEF growing site plants took a short amount of time to flower, had a moderate plant size, but low mass at the time of flowering. The KSR growing site had a moderate mass and low plant size at the time of flowering and took a moderate amount of time to flower.
+
+The LDA model based on plant population did not separate observations as clearly. From looking at Figure 2, we can see that there is a lot of overlap in these traits (mount of days until first flowering, plant size at first flower (FVeg), number of fruits, plant mass at the first day of flowering, and plant height at first flower (HVeg)) between the different populations.
+
+Biologically, this could mean that the plant development cycle is highly impacted by their environmental conditions. Based on the data, we can see that Timmins growing site has the longest time to flowering compared to the other growing sites. Timmins is also very far north, and likely harsher winters; thus, there is a shorter growing season and optimal time for plants to flower. Regardless of population, plants will adapt to their environmental conditions and adjust their developmental processes to coincide with their weather. As plants are stationary organisms, their ability to adapt to their environment is key to their survival. Similarly, mass also plays a large on distinguishing different sites and loads similarly to flowering time. This makes sense biologically because if a plant does not flower until later, it will have more time to grow.
